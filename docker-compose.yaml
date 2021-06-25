@@ -1,0 +1,133 @@
+version: '3.1'
+
+services:
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8 --collation-server=utf8_bin
+    ports:
+      - '3306:3306'
+    volumes:
+      - './zabbix/mysql:/var/lib/data'
+    environment:
+      - MYSQL_ROOT_PASSWORD=carryontech
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=carryontech
+    deploy:
+      resources:
+        limits:
+          cpus: '0.70'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  zabbix-server:
+    container_name: zabbix-server
+    image: zabbix/zabbix-server-mysql:ubuntu-5.4-latest
+    links:
+      - mysql
+    restart: always
+    ports:
+      - '10051:10051'
+    volumes:
+      - './zabbix/alertscripts:/usr/lib/zabbix/alertscripts'
+    environment:
+      - DB_SERVER_HOST=mysql
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=carryontech
+    depends_on:
+      - mysql
+    deploy:
+      resources:
+        limits:
+          cpus: '0.70'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  zabbix-frontend:
+    container_name: zabbix-frontend
+    image: zabbix/zabbix-web-apache-mysql:ubuntu-5.4-latest
+    links:
+      - mysql
+    restart: always
+    ports:
+      - '80:8080'
+      - '443:8443'
+    environment:
+      - DB_SERVER_HOST=mysql
+      - MYSQL_DATABASE=zabbix
+      - MYSQL_USER=zabbix
+      - MYSQL_PASSWORD=carryontech
+      - PHP_TZ=America/Sao_Paulo
+    depends_on:
+      - mysql
+    deploy:
+      resources:
+        limits:
+          cpus: '0.70'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+   
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    links:
+      - mysql
+      - zabbix-server
+    restart: always
+    ports:
+      - '3000:3000'
+    environment: 
+      - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app
+    depends_on:
+      - mysql
+      - zabbix-server
+    deploy:
+      resources:
+        limits:
+          cpus: '0.70'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  zabbix-agent:
+    container_name: zabbix-agent
+    image: zabbix/zabbix-agent2:ubuntu-5.4-latest
+    user: root
+    links:
+      - zabbix-server
+    restart: always
+    privileged: true
+    volumes:
+      - /var/run:/var/run
+    ports:
+      - '10050:10050'
+    environment:
+      - ZBX_HOSTNAME=Zabbix server
+      - ZBX_SERVER_HOST=172.18.0.1
+    deploy:
+      resources:
+        limits:
+          cpus: '0.70'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+  phpmyadmin:
+    depends_on:
+      - mysql
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports:
+      - '8080:80'
+    environment:
+      PMA_HOST: mysql
+      MYSQL_ROOT_PASSWORD: carryontech 
